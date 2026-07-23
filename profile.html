@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حلقة — البروفايل</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <div class="brand">🌙 حلقة</div>
+    <nav>
+      <a href="/feed.html">الرئيسية</a>
+      <a href="#" class="active">حسابي</a>
+      <button id="logoutBtn">خروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div id="profileHeader"></div>
+    <div id="postsList"></div>
+    <div class="loading-ring" id="loadingRing"></div>
+  </div>
+</div>
+
+<!-- Edit profile modal (simple inline panel) -->
+<script src="/js/app.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+let targetUsername = params.get('u');
+let pendingAvatar = null;
+
+function postCard(p, isOwner) {
+  const img = p.image ? `<img class="post-image" src="${p.image}" alt="">` : '';
+  return `
+  <div class="post" data-id="${p.id}">
+    <div class="post-content">${escapeHtml(p.content)}</div>
+    ${img}
+    <div class="post-actions">
+      <span class="post-meta">${timeAgo(p.createdAt)} · ${p.likes.length} إعجاب · ${p.comments.length} تعليق</span>
+      ${isOwner ? `<button class="del-btn" data-id="${p.id}">🗑️ حذف</button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function render() {
+  const me = await requireAuth();
+  if (!me) return;
+  if (!targetUsername) targetUsername = me.username;
+
+  document.getElementById('logoutBtn').onclick = logout;
+
+  let data;
+  try {
+    data = await api('/api/users/' + encodeURIComponent(targetUsername));
+  } catch (err) {
+    document.getElementById('profileHeader').innerHTML = `<div class="empty-state">هاد المستخدم ماكاينش</div>`;
+    return;
+  }
+  const u = data.user;
+  const isOwner = me.username === u.username;
+  const isFollowing = u.followers.includes(me.username);
+
+  document.getElementById('profileHeader').innerHTML = `
+    <div class="profile-header">
+      ${avatarHtml(u)}
+      <h2>${escapeHtml(u.displayName)} ${verifiedBadge(u.verified)}</h2>
+      <div class="uname">@${escapeHtml(u.username)}</div>
+      ${u.bio ? `<div class="bio">${escapeHtml(u.bio)}</div>` : ''}
+      <div class="stat-row">
+        <div><b>${data.posts.length}</b>منشور</div>
+        <div><b>${u.followers.length}</b>متابع</div>
+        <div><b>${u.following.length}</b>يتابع</div>
+      </div>
+      ${isOwner
+        ? `<button class="btn btn-ghost btn-sm" id="editBtn">تعديل البروفايل</button>`
+        : `<button class="btn ${isFollowing ? 'btn-ghost' : 'btn-primary'} btn-sm" id="followBtn" style="width:auto">${isFollowing ? 'إلغاء المتابعة' : 'تابع'}</button>`
+      }
+      <div id="editPanel" style="display:none; text-align:right; margin-top:18px; border-top:1px solid var(--paper-dim); padding-top:16px">
+        <div class="field"><label>الاسم الكامل</label><input type="text" id="editName" value="${escapeHtml(u.displayName)}"></div>
+        <div class="field"><label>نبذة عنك</label><textarea id="editBio" maxlength="250">${escapeHtml(u.bio || '')}</textarea></div>
+        <div class="field"><label>الصورة الشخصية</label><input type="file" id="editAvatar" accept="image/*"></div>
+        <button class="btn btn-primary btn-sm" id="saveProfile" style="width:auto">حفظ</button>
+      </div>
+    </div>
+  `;
+
+  if (isOwner) {
+    document.getElementById('editBtn').onclick = () => {
+      const p = document.getElementById('editPanel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    };
+    document.getElementById('editAvatar').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) pendingAvatar = await readFileAsDataUrl(file);
+    });
+    document.getElementById('saveProfile').onclick = async () => {
+      try {
+        await api('/api/profile', { method: 'PUT', body: {
+          displayName: document.getElementById('editName').value,
+          bio: document.getElementById('editBio').value,
+          avatar: pendingAvatar,
+        }});
+        toast('تم الحفظ');
+        render();
+      } catch (err) { toast(err.message); }
+    };
+  } else {
+    document.getElementById('followBtn').onclick = async () => {
+      try {
+        await api('/api/follow/' + encodeURIComponent(u.username), { method: isFollowing ? 'DELETE' : 'POST' });
+        render();
+      } catch (err) { toast(err.message); }
+    };
+  }
+
+  document.getElementById('loadingRing').style.display = 'none';
+  const list = document.getElementById('postsList');
+  if (data.posts.length === 0) {
+    list.innerHTML = `<div class="empty-state">مازال ماكاين حتى منشور</div>`;
+  } else {
+    list.innerHTML = data.posts.map(p => postCard(p, isOwner)).join('');
+  }
+
+  list.addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('.del-btn');
+    if (delBtn) {
+      if (!confirm('واخا تمسح هاد المنشور؟')) return;
+      try {
+        await api(`/api/posts/${delBtn.dataset.id}`, { method: 'DELETE' });
+        delBtn.closest('.post').remove();
+      } catch (err) { toast(err.message); }
+    }
+  });
+}
+
+render();
+</script>
+</body>
+</html>

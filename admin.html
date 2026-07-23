@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حلقة — لوحة الإدارة</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="admin-shell">
+  <div class="admin-sidebar">
+    <div class="brand">🌙 حلقة <span style="font-size:11px;color:#8ea9be;font-weight:400">الإدارة</span></div>
+    <a href="#dashboard" data-tab="dashboard" class="active">📊 لوحة القيادة</a>
+    <a href="#verify" data-tab="verify">🔵 طلبات التوثيق</a>
+    <a href="#users" data-tab="users">👥 المستخدمين</a>
+    <a href="#posts" data-tab="posts">📝 المنشورات</a>
+    <a href="/feed.html" style="margin-top:20px; color:#8ea9be">↩ رجوع للموقع</a>
+    <a href="#" id="logoutBtn">🚪 خروج</a>
+  </div>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1 id="pageTitle">لوحة القيادة</h1>
+      <div id="searchWrap"></div>
+    </div>
+    <div id="content"><div class="loading-ring"></div></div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

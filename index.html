@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حلقة — انضم للدائرة</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-shell">
+  <div class="auth-hero">
+    <div class="mark">حلقة</div>
+    <div class="tag">فضاء ديجيتال كتلتقاو فيه الناس، كتبانو الأفكار، وكتبنى الثقة — بحال الحلقة فالساحة، بلا حدود.</div>
+    <div class="ring">🌙</div>
+  </div>
+  <div class="auth-form-wrap">
+    <div class="auth-card">
+
+      <!-- LOGIN FORM -->
+      <div id="loginView">
+        <h2>مرحبا بيك من جديد</h2>
+        <div class="sub">دخل لحسابك باش تكمل الحلقة</div>
+        <div id="loginError"></div>
+        <form id="loginForm">
+          <div class="field">
+            <label>اسم المستخدم أو البريد الإلكتروني</label>
+            <input type="text" id="loginId" required autocomplete="username">
+          </div>
+          <div class="field">
+            <label>كلمة السر</label>
+            <input type="password" id="loginPass" required autocomplete="current-password">
+          </div>
+          <button class="btn btn-primary" type="submit" id="loginBtn">دخول</button>
+        </form>
+        <div class="auth-switch">ماعندكش حساب؟ <a href="#" id="showRegister">دير حساب جديد</a></div>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div id="registerView" style="display:none">
+        <h2>دير حساب فحلقة</h2>
+        <div class="sub">دقيقة وحدة وتكون داخل الدائرة</div>
+        <div id="registerError"></div>
+        <form id="registerForm">
+          <div class="field">
+            <label>الاسم الكامل</label>
+            <input type="text" id="regName" required maxlength="60">
+          </div>
+          <div class="field">
+            <label>اسم المستخدم</label>
+            <input type="text" id="regUsername" required pattern="[a-z0-9_]{3,20}" title="أحرف لاتينية صغيرة، أرقام، أو _ (3 إلى 20)" placeholder="مثال: yassine_23">
+          </div>
+          <div class="field">
+            <label>البريد الإلكتروني</label>
+            <input type="email" id="regEmail" required>
+          </div>
+          <div class="field">
+            <label>كلمة السر</label>
+            <input type="password" id="regPass" required minlength="6">
+          </div>
+          <button class="btn btn-primary" type="submit" id="registerBtn">إنشاء الحساب</button>
+        </form>
+        <div class="auth-switch">عندك حساب ديجا؟ <a href="#" id="showLogin">دخول</a></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  document.getElementById('showRegister').onclick = (e) => {
+    e.preventDefault();
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('registerView').style.display = 'block';
+  };
+  document.getElementById('showLogin').onclick = (e) => {
+    e.preventDefault();
+    document.getElementById('registerView').style.display = 'none';
+    document.getElementById('loginView').style.display = 'block';
+  };
+
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const errBox = document.getElementById('loginError');
+    errBox.innerHTML = '';
+    btn.disabled = true; btn.textContent = 'كنداخل...';
+    try {
+      await api('/api/login', { method: 'POST', body: {
+        username: document.getElementById('loginId').value,
+        password: document.getElementById('loginPass').value,
+      }});
+      window.location.href = '/feed.html';
+    } catch (err) {
+      errBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+      btn.disabled = false; btn.textContent = 'دخول';
+    }
+  });
+
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('registerBtn');
+    const errBox = document.getElementById('registerError');
+    errBox.innerHTML = '';
+    btn.disabled = true; btn.textContent = 'كنسجل...';
+    try {
+      await api('/api/register', { method: 'POST', body: {
+        displayName: document.getElementById('regName').value,
+        username: document.getElementById('regUsername').value.toLowerCase(),
+        email: document.getElementById('regEmail').value,
+        password: document.getElementById('regPass').value,
+      }});
+      window.location.href = '/feed.html';
+    } catch (err) {
+      errBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+      btn.disabled = false; btn.textContent = 'إنشاء الحساب';
+    }
+  });
+
+  // already logged in? go straight to feed
+  api('/api/me').then(() => window.location.href = '/feed.html').catch(() => {});
+</script>
+</body>
+</html>

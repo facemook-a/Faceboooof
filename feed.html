@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حلقة — الرئيسية</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <div class="brand">🌙 حلقة</div>
+    <nav>
+      <a href="/feed.html" class="active">الرئيسية</a>
+      <a href="#" id="profileLink">حسابي</a>
+      <a href="/admin.html" id="adminLink" style="display:none">⚙️ الإدارة</a>
+      <button class="bell" id="bellBtn">🔔<span class="dot" id="bellDot" style="display:none"></span></button>
+      <button id="logoutBtn">خروج</button>
+    </nav>
+  </div>
+
+  <div class="container-wide">
+    <div class="two-col">
+      <div>
+        <div class="composer">
+          <textarea id="postContent" placeholder="شنو كتقلب فباللك؟" maxlength="2000"></textarea>
+          <div id="imgPreviewWrap"></div>
+          <div class="composer-actions">
+            <label for="postImage">📷 زيد صورة</label>
+            <input type="file" id="postImage" accept="image/*" style="display:none">
+            <button class="btn btn-primary btn-sm" id="publishBtn" style="width:auto">نشر</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <button class="btn btn-ghost btn-sm" id="scopeAll">الكل</button>
+          <button class="btn btn-ghost btn-sm" id="scopeFollowing">اللي كنتابع</button>
+        </div>
+
+        <div id="feedList"></div>
+        <div class="loading-ring" id="loadingRing"></div>
+      </div>
+
+      <div>
+        <div class="side-card" id="verifyCard"></div>
+        <div class="side-card">
+          <h3>🔔 الإشعارات</h3>
+          <div id="notifList"><div style="color:#a29a82;font-size:13.5px">مافيش إشعارات دابا</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+let scope = 'all';
+let pendingImage = null;
+
+function postCard(p) {
+  const img = p.image ? `<img class="post-image" src="${p.image}" alt="">` : '';
+  const commentsHtml = (p.comments || []).slice(-3).map(c => `
+    <div class="comment"><b>${escapeHtml(c.authorDisplayName)}:</b> <span>${escapeHtml(c.content)}</span></div>
+  `).join('');
+  return `
+  <div class="post" data-id="${p.id}">
+    <div class="post-head">
+      ${avatarHtml({displayName: p.authorDisplayName, avatar: p.authorAvatar}, 'sm')}
+      <div>
+        <div class="name-row">
+          <a href="/profile.html?u=${encodeURIComponent(p.authorUsername)}">${escapeHtml(p.authorDisplayName)}</a>
+          ${verifiedBadge(p.authorVerified)}
+        </div>
+        <div class="username">@${escapeHtml(p.authorUsername)} · ${timeAgo(p.createdAt)}</div>
+      </div>
+    </div>
+    <div class="post-content">${escapeHtml(p.content)}</div>
+    ${img}
+    <div class="post-actions">
+      <button class="like-btn ${p.likedByMe ? 'liked' : ''}" data-id="${p.id}">
+        ${p.likedByMe ? '❤️' : '🤍'} <span class="like-count">${p.likeCount}</span>
+      </button>
+      <button class="comment-toggle" data-id="${p.id}">💬 <span>${p.commentCount}</span></button>
+      ${CURRENT_USER && (CURRENT_USER.username === p.authorUsername || CURRENT_USER.role === 'admin') ? `<button class="del-btn" data-id="${p.id}">🗑️ حذف</button>` : ''}
+    </div>
+    <div class="comments" style="display:none">
+      ${commentsHtml}
+      <div class="comment-form">
+        <input type="text" placeholder="اكتب تعليق..." class="comment-input" maxlength="500">
+        <button class="btn btn-primary btn-sm comment-send">بعث</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadFeed() {
+  document.getElementById('loadingRing').style.display = 'block';
+  document.getElementById('feedList').innerHTML = '';
+  try {
+    const { posts } = await api('/api/posts?scope=' + scope);
+    document.getElementById('loadingRing').style.display = 'none';
+    if (posts.length === 0) {
+      document.getElementById('feedList').innerHTML = `<div class="empty-state">
+        <div style="font-size:40px">🌙</div>
+        ${scope === 'following' ? 'مازال ماتبعتي حتى حد. جرب "الكل" باش تكتشف ناس جداد.' : 'مازال ماكاين حتى منشور. كن أول واحد ينشر!'}
+      </div>`;
+      return;
+    }
+    document.getElementById('feedList').innerHTML = posts.map(postCard).join('');
+  } catch (err) {
+    document.getElementById('loadingRing').style.display = 'none';
+    toast(err.message);
+  }
+}
+
+document.getElementById('scopeAll').onclick = () => { scope = 'all'; loadFeed(); };
+document.getElementById('scopeFollowing').onclick = () => { scope = 'following'; loadFeed(); };
+
+document.getElementById('postImage').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingImage = await readFileAsDataUrl(file);
+  document.getElementById('imgPreviewWrap').innerHTML = `
+    <div class="img-preview"><img src="${pendingImage}"><button class="remove" id="removeImg">✕</button></div>`;
+  document.getElementById('removeImg').onclick = () => {
+    pendingImage = null;
+    document.getElementById('imgPreviewWrap').innerHTML = '';
+    document.getElementById('postImage').value = '';
+  };
+});
+
+document.getElementById('publishBtn').onclick = async () => {
+  const content = document.getElementById('postContent').value.trim();
+  if (!content && !pendingImage) return toast('كتب شي حاجة أو زيد صورة');
+  const btn = document.getElementById('publishBtn');
+  btn.disabled = true;
+  try {
+    await api('/api/posts', { method: 'POST', body: { content, image: pendingImage } });
+    document.getElementById('postContent').value = '';
+    pendingImage = null;
+    document.getElementById('imgPreviewWrap').innerHTML = '';
+    document.getElementById('postImage').value = '';
+    loadFeed();
+  } catch (err) { toast(err.message); }
+  btn.disabled = false;
+};
+
+document.getElementById('feedList').addEventListener('click', async (e) => {
+  const likeBtn = e.target.closest('.like-btn');
+  const delBtn = e.target.closest('.del-btn');
+  const cToggle = e.target.closest('.comment-toggle');
+  const cSend = e.target.closest('.comment-send');
+
+  if (likeBtn) {
+    const id = likeBtn.dataset.id;
+    const liked = likeBtn.classList.contains('liked');
+    try {
+      const res = await api(`/api/posts/${id}/like`, { method: liked ? 'DELETE' : 'POST' });
+      likeBtn.classList.toggle('liked');
+      likeBtn.querySelector('.like-count').textContent = res.likeCount;
+      likeBtn.innerHTML = (liked ? '🤍' : '❤️') + ` <span class="like-count">${res.likeCount}</span>`;
+    } catch (err) { toast(err.message); }
+  }
+  if (delBtn) {
+    if (!confirm('واخا تمسح هاد المنشور؟')) return;
+    try {
+      await api(`/api/posts/${delBtn.dataset.id}`, { method: 'DELETE' });
+      delBtn.closest('.post').remove();
+    } catch (err) { toast(err.message); }
+  }
+  if (cToggle) {
+    const box = cToggle.closest('.post').querySelector('.comments');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  }
+  if (cSend) {
+    const post = cSend.closest('.post');
+    const input = post.querySelector('.comment-input');
+    const content = input.value.trim();
+    if (!content) return;
+    try {
+      const { comment } = await api(`/api/posts/${post.dataset.id}/comments`, { method: 'POST', body: { content } });
+      const div = document.createElement('div');
+      div.className = 'comment';
+      div.innerHTML = `<b>${escapeHtml(comment.authorDisplayName)}:</b> <span>${escapeHtml(comment.content)}</span>`;
+      post.querySelector('.comment-form').insertAdjacentElement('beforebegin', div);
+      input.value = '';
+    } catch (err) { toast(err.message); }
+  }
+});
+
+async function loadSidebar() {
+  try {
+    const { notifications } = await api('/api/notifications');
+    const unread = notifications.filter(n => !n.read).length;
+    document.getElementById('bellDot').style.display = unread ? 'block' : 'none';
+    if (notifications.length) {
+      document.getElementById('notifList').innerHTML = notifications.slice(0, 8).map(n => `
+        <div class="notif-item ${n.read ? '' : 'unread'}">
+          <div>
+            <div>${escapeHtml(n.message)}</div>
+            <div class="notif-time">${timeAgo(n.createdAt)}</div>
+          </div>
+        </div>`).join('');
+    }
+  } catch {}
+
+  const card = document.getElementById('verifyCard');
+  if (CURRENT_USER.verified) {
+    card.innerHTML = `<h3>✔️ حساب موثّق</h3><div style="font-size:13.5px;color:#6b6252">مبروك، عندك الشارة الزرقاء.</div>`;
+    return;
+  }
+  try {
+    const { requests } = await api('/api/verify-request/mine');
+    const pending = requests.find(r => r.status === 'pending');
+    if (pending) {
+      card.innerHTML = `<h3>الشارة الزرقاء</h3><span class="pill pill-pending">الطلب فالانتظار</span>
+        <div style="font-size:13px;color:#6b6252;margin-top:8px">غادي يتراجع الطلب من طرف الإدارة قريبا.</div>`;
+      return;
+    }
+    const lastRejected = requests.find(r => r.status === 'rejected');
+    card.innerHTML = `
+      <h3>🔵 طلب الشارة الزرقاء</h3>
+      ${lastRejected ? '<span class="pill pill-rejected">الطلب السابق تم رفضه</span>' : ''}
+      <div style="font-size:13px;color:#6b6252;margin:10px 0">قدم سبب واضح باش يتوافق على حسابك.</div>
+      <textarea id="verifyReason" placeholder="علاش خاصك التوثيق؟ (مثال: شخصية عامة، علامة تجارية...)" style="width:100%;min-height:60px;border:1.5px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;margin-bottom:8px"></textarea>
+      <button class="btn btn-brass btn-sm" id="sendVerify" style="width:100%">بعث الطلب</button>
+    `;
+    document.getElementById('sendVerify').onclick = async () => {
+      const reason = document.getElementById('verifyReason').value.trim();
+      if (!reason) return toast('كتب السبب من فضلك');
+      try {
+        await api('/api/verify-request', { method: 'POST', body: { reason } });
+        toast('تم بعث الطلب!');
+        loadSidebar();
+      } catch (err) { toast(err.message); }
+    };
+  } catch {}
+}
+
+document.getElementById('logoutBtn').onclick = logout;
+document.getElementById('bellBtn').onclick = async () => {
+  await api('/api/notifications/read', { method: 'POST' });
+  document.getElementById('bellDot').style.display = 'none';
+};
+
+(async () => {
+  const user = await requireAuth();
+  if (!user) return;
+  document.getElementById('profileLink').href = '/profile.html?u=' + encodeURIComponent(user.username);
+  if (user.role === 'admin') document.getElementById('adminLink').style.display = 'inline-block';
+  loadFeed();
+  loadSidebar();
+})();
+</script>
+</body>
+</html>
